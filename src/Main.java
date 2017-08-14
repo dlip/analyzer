@@ -292,6 +292,7 @@ public class Main
 
             Sentence sentence = new Sentence();
             sentence.text = text;
+            sentence.line = line;
             sentence.line_index = line_index;
 
             List<Token> tokens = tokenizer.tokenize(text);
@@ -413,9 +414,6 @@ public class Main
                 // skip undesired terms
 
                 if(filtered(token)) continue;
-                if(!sentence_map.containsKey(token.getWrittenBaseForm())) {
-                    continue;
-                }
                 
                 // record event
 
@@ -452,9 +450,11 @@ public class Main
                     }
                     extraFieldsList.add(cloze.toString());
                     extraFieldsList.add(sentence.nplus_index.toString());
+                    if(enable_append_line)
+                        extraFieldsList.add(sentence.line);
                 }
 
-                if(enable_append_line)
+                if(!enable_sentence_reading && enable_append_line)
                     extraFieldsList.add(line);
                 
                 if(extraFieldsList.size() > 0)
