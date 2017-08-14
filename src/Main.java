@@ -414,6 +414,9 @@ public class Main
                 // skip undesired terms
 
                 if(filtered(token)) continue;
+                if(!sentence_map.containsKey(token.getWrittenBaseForm())) {
+                    continue;
+                }
                 
                 // record event
 
