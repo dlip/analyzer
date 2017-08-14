@@ -276,6 +276,107 @@ public class Main
 
         String line;
         Integer line_index = 0;
+        List<Sentence> sentences = new ArrayList<>();
+
+        while ((line = readline(in, false)) != null) {
+            String text = line;
+            if (sentence_index > -1) {
+                String[] split = line.split("\\t");
+                if (split.length > sentence_index) {
+                    text = split[sentence_index];
+                } else {
+                    update.accept("Sentence index out of range", 0.0);
+                    return;
+                }
+            }
+
+            Sentence sentence = new Sentence();
+            sentence.text = text;
+            sentence.line_index = line_index;
+
+            List<Token> tokens = tokenizer.tokenize(text);
+            for (Token token : tokens)
+            {
+                if (!token.getWrittenBaseForm().matches("[\\u4e00-\\u9faf]+.*")) continue;
+
+                sentence.tokens.add(token);
+
+            }
+
+            if (sentence.tokens.size() > 0) {
+                sentences.add(sentence);
+            }
+            line_index ++;
+        }
+
+        HashMap<String, Sentence> sentence_map = new HashMap<>();
+
+        while (true) {
+
+            HashMap<String, Integer> frequency = new HashMap<>();
+            List<Integer> duplicates = new ArrayList<>();
+            // remove duplicate sentence with 1 unknown word
+            for (int x = 0; x < sentences.size(); x++) {
+                Sentence sentence = sentences.get(x);
+
+                if (sentence.tokens.size() == 1) {
+                    Token token = sentence.tokens.get(0);
+                    if (frequency.containsKey(token.getWrittenBaseForm())) {
+                        duplicates.add(x);
+                    } else frequency.put(token.getWrittenBaseForm(), 1);
+                } if (sentence.tokens.size() == 0) {
+                    // could have been reduced to 0 if it had 2 of the same kanji
+                    duplicates.add(x);
+                }
+            }
+
+            Collections.reverse(duplicates);
+
+            for (Integer duplicate : duplicates) {
+                sentences.remove((int)duplicate);
+            }
+
+            List<Sentence> new_additions = new ArrayList<>();
+            List<Integer> safe_to_remove = new ArrayList<>();
+            for (int x = 0; x < sentences.size(); x++) {
+                Sentence sentence = sentences.get(x);
+                Token token = sentence.tokens.get(0);
+                if (sentence.tokens.size() == 1) {
+                    new_additions.add(sentence);
+                    safe_to_remove.add(x);
+                }
+            }
+
+            Collections.reverse(safe_to_remove);
+
+            for (Integer remove : safe_to_remove) {
+                sentences.remove((int)remove);
+            }
+
+            for (Sentence new_addition : new_additions) {
+                for (int x = 0; x < sentences.size(); x++) {
+                    Sentence sentence = sentences.get(x);
+                    for (int y = sentence.tokens.size() - 1; y > -1; y--) {
+                        if (sentence.tokens.get(y).getWrittenBaseForm().equals(new_addition.tokens.get(0).getWrittenBaseForm())) {
+                            sentence.tokens.remove(y);
+                        }
+                    }
+
+                }
+            }
+
+            if (new_additions.size() == 0) break;
+            for (int x = 0; x < new_additions.size(); x++) {
+                Sentence new_addition = new_additions.get(x);
+                new_addition.nplus_index = sentence_map.size() + x;
+                sentence_map.put(new_addition.tokens.get(0).getWrittenBaseForm(), new_addition);
+            }
+
+        }
+
+
+        line_index = 0;
+        in = new InputStreamReader(new FileInputStream(in_name), "UTF-8");
 
         while ((line = readline(in, false)) != null)
         {
@@ -312,6 +413,9 @@ public class Main
                 // skip undesired terms
 
                 if(filtered(token)) continue;
+                if(!sentence_map.containsKey(token.getWrittenBaseForm())) {
+                    continue;
+                }
                 
                 // record event
 
@@ -326,11 +430,14 @@ public class Main
 
                 List<String> extraFieldsList = new ArrayList<String>();
 
-                if(enable_sentence_reading)
+                if(enable_sentence_reading && sentence_map.containsKey(token.getWrittenBaseForm()))
                 {
+                    Sentence sentence = sentence_map.get(token.getWrittenBaseForm());
+                    List<Token> sentence_tokens = tokenizer.tokenize(sentence.text);
+
                     StringBuilder cloze = new StringBuilder();
 
-                    for (Token clozeToken : tokens)
+                    for (Token clozeToken : sentence_tokens)
                     {
                         StringBuilder word = new StringBuilder();
                         boolean isCurrentToken = token.getSurface().equals(clozeToken.getSurface());
@@ -344,6 +451,7 @@ public class Main
                         cloze.append(word);
                     }
                     extraFieldsList.add(cloze.toString());
+                    extraFieldsList.add(sentence.nplus_index.toString());
                 }
 
                 if(enable_append_line)
